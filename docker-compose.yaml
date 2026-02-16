@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+#each service is a container
+# 3 containers: relay, device-a, device-b
+  relay:
+    #provide build directory and dockerfile for relay
+    build:
+      context: .
+      dockerfile: docker/relay.Dockerfile
+    container_name: iot-relay
+    #assign static IP address to relay container
+    networks:
+      iot-network:
+        ipv4_address: 172.20.0.10
+    #map port 8080 of the container to port 8080 on the host machine
+    ports:
+      - "8080:8080"
+      # Set logging level defaults to 'info' if LOG_LEVEL not defined
+      #helpful for debugging and monitoring the relay's activity later on
+    environment:
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+  #define device-a representing an IoT device
+  device-a:
+    build:
+      context: .
+      dockerfile: docker/device.Dockerfile
+    container_name: iot-device-a
+    networks:
+    #each device has unique static IP in same subnet
+      iot-network:
+        ipv4_address: 172.20.0.20
+    volumes:
+      - ./keys/device-a:/app/keys
+      - ./captures:/captures
+    environment:
+      - DEVICE_ID=device-a
+      - RELAY_URL=ws://172.20.0.10:8080
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      - relay
+  #define device-b representing second IoT device
+  device-b:
+    build:
+      context: .
+      dockerfile: docker/device.Dockerfile
+    container_name: iot-device-b
+    networks:
+      iot-network:
+        ipv4_address: 172.20.0.21
+    volumes:
+      - ./keys/device-b:/app/keys
+      - ./captures:/captures
+    environment:
+      - DEVICE_ID=device-b
+      - RELAY_URL=ws://172.20.0.10:8080
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      - relay
+
+networks:
+  iot-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+          gateway: 172.20.0.1
