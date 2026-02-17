@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
 #each service is a container
 # 3 containers: relay, device-a, device-b
