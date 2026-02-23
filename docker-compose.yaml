@@ -35,6 +35,8 @@ services:
       - DEVICE_ID=device-a
       - RELAY_URL=ws://172.20.0.10:8080
       - LOG_LEVEL=${LOG_LEVEL:-info}
+    stdin_open: true
+    tty: true
     depends_on:
       - relay
   #define device-b representing second IoT device
@@ -53,6 +55,8 @@ services:
       - DEVICE_ID=device-b
       - RELAY_URL=ws://172.20.0.10:8080
       - LOG_LEVEL=${LOG_LEVEL:-info}
+    stdin_open: true
+    tty: true
     depends_on:
       - relay
 
