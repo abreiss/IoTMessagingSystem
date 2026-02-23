@@ -6,45 +6,12 @@ import (
 	"log" //logging
 	"os"  // for env variables
 	"os/signal"
-	"sync"
 	"strings"
 	"syscall"
 	"time" // for sleep
 
 	"github.com/gorilla/websocket" // websockets
 )
-
-type consoleUI struct {
-	deviceID string
-	mu       sync.Mutex
-}
-
-func (c *consoleUI) promptLocked() {
-	fmt.Fprintf(os.Stdout, "[%s] Enter message (or 'quit' to exit): ", c.deviceID)
-}
-
-func (c *consoleUI) Prompt() {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.promptLocked()
-}
-
-func (c *consoleUI) Println(line string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	// Start on a fresh line in case a prompt is currently displayed.
-	fmt.Fprint(os.Stdout, "\r\n")
-	fmt.Fprintln(os.Stdout, line)
-}
-
-func (c *consoleUI) PrintlnAndPrompt(line string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	// Start on a fresh line in case a prompt is currently displayed.
-	fmt.Fprint(os.Stdout, "\r\n")
-	fmt.Fprintln(os.Stdout, line)
-	c.promptLocked()
-}
 
 func main() {
 	//get device ID env variable
@@ -84,26 +51,20 @@ func main() {
 
 	sendCh := make(chan string, 10)
 
-	ui := &consoleUI{deviceID: deviceID}
-
 	// Goroutine to read from stdin (for interactive testing)
 	go func() {
 		reader := bufio.NewReader(os.Stdin)
-		ui.Prompt()
 		for {
+			fmt.Printf("[%s] Enter message (or 'quit' to exit): ", deviceID)
 			text, err := reader.ReadString('\n')
 			if err != nil {
-				ui.Println(fmt.Sprintf("[%s] stdin closed (or read error): %v", deviceID, err))
+				log.Printf("[%s] stdin closed (or read error): %v", deviceID, err)
 				return
 			}
 			text = strings.TrimSpace(text)
 			if text == "quit" {
 				interrupt <- syscall.SIGTERM
 				return
-			}
-			if text == "" {
-				ui.Prompt()
-				continue
 			}
 			if text != "" {
 				sendCh <- text
@@ -118,10 +79,10 @@ func main() {
 		for {
 			_, message, err := conn.ReadMessage()
 			if err != nil {
-				ui.Println(fmt.Sprintf("[%s] Read error: %v", deviceID, err))
+				log.Printf("Read error: %v", err)
 				return
 			}
-			ui.PrintlnAndPrompt(fmt.Sprintf("[%s] Received: %s", deviceID, string(message)))
+			log.Printf("Received: %s", string(message))
 		}
 	}()
 
@@ -140,13 +101,13 @@ func main() {
 	for {
 		select {
 		case <-done:
-			ui.Println(fmt.Sprintf("[%s] Connection closed", deviceID))
+			log.Println("Connection closed")
 			return
 		case <-interrupt:
-			ui.Println(fmt.Sprintf("[%s] Shutting down gracefully...", deviceID))
+			log.Println("Shutting down gracefully...")
 			err := conn.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 			if err != nil {
-				ui.Println(fmt.Sprintf("[%s] Write close error: %v", deviceID, err))
+				log.Printf("Write close error: %v", err)
 			}
 			select {
 			case <-done:
@@ -154,9 +115,9 @@ func main() {
 			}
 			return
 		case msg := <-sendCh:
-			ui.PrintlnAndPrompt(fmt.Sprintf("[%s] Sent: %s", deviceID, msg))
+			log.Printf("Sending: %s", msg)
 			if err := conn.WriteMessage(websocket.TextMessage, []byte(msg)); err != nil {
-				ui.Println(fmt.Sprintf("[%s] Write error: %v", deviceID, err))
+				log.Printf("Write error: %v", err)
 				return
 			}
 		case <-ticker.C:
