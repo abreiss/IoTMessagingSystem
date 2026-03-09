@@ -40,9 +40,13 @@ docker attach iot-device-a
 docker attach iot-device-b
 ```
 
+4) Also if want to view only relay logs in terminal 4
+
+```bash
+docker logs -f iot-relay                                                                                              
+```
 Notes:
 - You may need to hit enter if theres no prompt to type right away.
-- To detach without stopping the container, use `Ctrl-p` then `Ctrl-q`.
 - Type `quit` to gracefully stop a device client.
 
 

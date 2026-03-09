@@ -1,11 +1,11 @@
 package main
 
 import (
-	"fmt"
+	"fmt"      //formatting
 	"log"      //log server events
 	"net/http" //http libary
-	"os"
-	"sync"
+	"os"       // for env variables
+	"sync"     // for mutex
 
 	"github.com/gorilla/websocket" //websockets
 )
@@ -22,6 +22,7 @@ var (
 	clientsMu sync.RWMutex
 )
 
+// main function to start the relay server
 func main() {
 	logLevel := os.Getenv("LOG_LEVEL")
 	if logLevel == "" {
@@ -29,9 +30,9 @@ func main() {
 	}
 
 	log.Printf("Starting relay server with log level: %s", logLevel)
-
+	//http dfault path for websocket connections
 	http.HandleFunc("/", handleWebSocket)
-
+	//start http server on port 8080
 	port := ":8080"
 	log.Printf("Relay server listening on %s", port)
 	if err := http.ListenAndServe(port, nil); err != nil {
@@ -58,10 +59,10 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Read error: %v", err)
 		return
 	}
-
+	//store device ID and log connection
 	deviceID := string(msg)
 	log.Printf("Device connected: %s from %s", deviceID, conn.RemoteAddr())
-
+	// Add client to the map
 	clientsMu.Lock()
 	clients[conn] = deviceID
 	clientCount := len(clients)
