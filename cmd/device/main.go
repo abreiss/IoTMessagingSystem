@@ -27,7 +27,20 @@ type Envelope struct {
 var (
 	sharedKey []byte     // AES-256 session key derived after ECDH handshake, nil until complete
 	cryptoMu  sync.Mutex // protects sharedKey
+	outputMu  sync.Mutex // serialises terminal output so prompt stays visible
 )
+
+// showPrompt prints a message line then re-displays the input prompt.
+// It clears the current terminal line first so partially-typed text or
+// a stale prompt does not get mixed into the output.
+func showPrompt(deviceID, msg string) {
+	outputMu.Lock()
+	defer outputMu.Unlock()
+	if msg != "" {
+		fmt.Printf("\r\033[K%s\n", msg)
+	}
+	fmt.Printf("\r\033[K[%s] Enter message (or 'quit' to exit): ", deviceID)
+}
 
 func main() {
 	//get device ID env variable
@@ -104,10 +117,10 @@ func main() {
 	sendCh := make(chan string, 10)
 
 	//goroutine to read from stdin for interactive testing
+	//prompt is displayed by showPrompt after every output event, not here
 	go func() {
 		reader := bufio.NewReader(os.Stdin)
 		for {
-			fmt.Printf("[%s] Enter message (or 'quit' to exit): ", deviceID)
 			text, err := reader.ReadString('\n')
 			if err != nil {
 				log.Printf("[%s] stdin closed (or read error): %v", deviceID, err)
@@ -120,6 +133,9 @@ func main() {
 			}
 			if text != "" {
 				sendCh <- text
+			} else {
+				//empty input — just re-show the prompt
+				showPrompt(deviceID, "")
 			}
 		}
 	}()
@@ -207,7 +223,7 @@ func main() {
 					continue
 				}
 
-				log.Printf("[%s] Received from %s: %s", deviceID, env.From, string(plaintext))
+				showPrompt(deviceID, fmt.Sprintf("[%s] Received from %s: %s", deviceID, env.From, string(plaintext)))
 			}
 		}
 	}()
@@ -215,6 +231,9 @@ func main() {
 	//send initial handshake after a short delay to let the relay welcome message arrive first
 	time.Sleep(1 * time.Second)
 	sendHandshake()
+
+	//show initial prompt so the user sees it right away
+	fmt.Printf("[%s] Enter message (or 'quit' to exit): ", deviceID)
 
 	//main event loop
 	ticker := time.NewTicker(30 * time.Second)
@@ -248,7 +267,7 @@ func main() {
 			cryptoMu.Unlock()
 
 			if key == nil {
-				log.Printf("[%s] Handshake not yet complete — cannot send message", deviceID)
+				showPrompt(deviceID, fmt.Sprintf("[%s] Handshake not yet complete — cannot send message", deviceID))
 				continue
 			}
 
@@ -275,7 +294,7 @@ func main() {
 				log.Printf("[%s] Write error: %v", deviceID, err)
 				return
 			}
-			log.Printf("[%s] Sent encrypted message", deviceID)
+			showPrompt(deviceID, fmt.Sprintf("[%s] Sent encrypted message", deviceID))
 
 		case <-ticker.C:
 			//heartbeat tick (no-op)
